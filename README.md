@@ -60,6 +60,9 @@ binary_sensor.daily_cleaning
 It is on while at least one configured room still needs cleaning. Its
 attributes include room totals and lists of cleaned and remaining rooms.
 
+All entities are grouped on a **Daily Cleaning** device page under the
+integration. Each room switch still has its own Home Assistant Area assignment.
+
 ## Cleaning day
 
 A new cleaning day starts at **03:00 in Home Assistant's local time zone**.

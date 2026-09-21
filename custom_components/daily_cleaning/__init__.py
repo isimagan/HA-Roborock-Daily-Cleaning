@@ -17,7 +17,7 @@ async def async_setup_entry(
 ) -> bool:
     """Set up Daily Cleaning from a config entry."""
     rooms = [RoomConfig.from_dict(room) for room in entry.data[CONF_ROOMS]]
-    manager = DailyCleaningManager(hass, rooms)
+    manager = DailyCleaningManager(hass, entry.entry_id, rooms)
     await manager.async_initialize()
     entry.runtime_data = manager
     entry.async_on_unload(manager.async_shutdown)

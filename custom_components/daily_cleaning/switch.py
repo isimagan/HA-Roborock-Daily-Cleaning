@@ -48,7 +48,7 @@ class DailyCleaningRoomSwitch(DailyCleaningEntity, SwitchEntity):
         """Initialize the room switch."""
         super().__init__(manager)
         self.room = room
-        self._attr_name = f"Daily cleaning {room.name}"
+        self._attr_name = room.name
         self._attr_unique_id = room.key
 
     async def async_added_to_hass(self) -> None:

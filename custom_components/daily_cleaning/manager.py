@@ -20,9 +20,12 @@ _LOGGER = logging.getLogger(__name__)
 class DailyCleaningManager:
     """Own persistent state and coordinate all Daily Cleaning entities."""
 
-    def __init__(self, hass: HomeAssistant, rooms: list[RoomConfig]) -> None:
+    def __init__(
+        self, hass: HomeAssistant, entry_id: str, rooms: list[RoomConfig]
+    ) -> None:
         """Initialize the manager."""
         self.hass = hass
+        self.entry_id = entry_id
         self.rooms = {room.key: room for room in rooms}
         self.states: dict[str, RoomState] = {}
         self._store: Store[dict] = Store(hass, STORAGE_VERSION, STORAGE_KEY)

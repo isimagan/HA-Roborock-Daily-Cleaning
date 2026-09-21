@@ -25,7 +25,7 @@ class DailyCleaningBinarySensor(DailyCleaningEntity, BinarySensorEntity):
     """Report whether any configured room still needs cleaning."""
 
     _attr_icon = "mdi:home-alert"
-    _attr_name = "Daily cleaning"
+    _attr_name = None
     _attr_unique_id = DOMAIN
 
     def __init__(self, manager: DailyCleaningManager) -> None:
