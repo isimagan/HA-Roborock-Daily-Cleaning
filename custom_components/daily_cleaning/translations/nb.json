@@ -1,0 +1,29 @@
+{
+  "title": "Daglig rengjøring",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Velg Roborock-støvsugere",
+        "description": "Velg alle Roborock-støvsugere som skal inngå i Daglig rengjøring.",
+        "data": {"vacuum_entity_ids": "Roborock-støvsugere"}
+      },
+      "rooms": {
+        "title": "Velg rom",
+        "description": "Velg Roborock-segmentene som skal følges opp.",
+        "data": {"room_tokens": "Rom"}
+      },
+      "area": {
+        "title": "Koble {room}",
+        "description": "Velg Home Assistant-området for Roborock-segmentet {room} på {vacuum}.",
+        "data": {"area_id": "Home Assistant-område"}
+      }
+    },
+    "error": {"select_at_least_one_room": "Velg minst ett rom."},
+    "abort": {
+      "already_configured": "Daglig rengjøring er allerede konfigurert.",
+      "reconfigure_successful": "Daglig rengjøring ble oppdatert.",
+      "no_roborock_vacuums": "Fant ingen innlastet Roborock-støvsuger med støtte for romrengjøring.",
+      "no_segments": "De valgte støvsugerne rapporterte ingen romsegmenter. Konfigurer kart og områder i Roborock-integrasjonen først."
+    }
+  }
+}

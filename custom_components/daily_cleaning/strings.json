@@ -1,0 +1,37 @@
+{
+  "title": "Daily Cleaning",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Select Roborock vacuums",
+        "description": "Select every Roborock vacuum that should participate in Daily Cleaning.",
+        "data": {
+          "vacuum_entity_ids": "Roborock vacuums"
+        }
+      },
+      "rooms": {
+        "title": "Select rooms",
+        "description": "Select the Roborock map segments to track.",
+        "data": {
+          "room_tokens": "Rooms"
+        }
+      },
+      "area": {
+        "title": "Map {room}",
+        "description": "Select the Home Assistant Area for Roborock segment {room} on {vacuum}.",
+        "data": {
+          "area_id": "Home Assistant Area"
+        }
+      }
+    },
+    "error": {
+      "select_at_least_one_room": "Select at least one room."
+    },
+    "abort": {
+      "already_configured": "Daily Cleaning is already configured.",
+      "reconfigure_successful": "Daily Cleaning was updated successfully.",
+      "no_roborock_vacuums": "No loaded Roborock vacuum with room-cleaning support was found.",
+      "no_segments": "The selected vacuums did not report any room segments. Configure their maps and areas in the Roborock integration first."
+    }
+  }
+}
