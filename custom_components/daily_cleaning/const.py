@@ -4,7 +4,7 @@ from datetime import time
 from typing import Final
 
 DOMAIN: Final = "daily_cleaning"
-VERSION: Final = "0.1.1"
+VERSION: Final = "0.2.0"
 PLATFORMS: Final = ["switch", "binary_sensor"]
 
 CONF_ROOMS: Final = "rooms"

@@ -72,11 +72,50 @@ reset.
 
 ## Current scope
 
-Version 0.1 tracks manual room status, performs the daily reset, and aggregates
+Version 0.2 tracks manual room status, performs the daily reset, and aggregates
 the result across all linked Roborock vacuums. It does not yet infer completed
-rooms from Roborock cleaning jobs. The stored relationship between Roborock
-config entry, vacuum entity, segment, and Area is designed for that later
-phase.
+rooms from Roborock cleaning jobs.
+
+### Temporary Roborock diagnostics
+
+Version 0.2 includes a bounded, in-memory diagnostic recorder for collecting
+evidence before automatic room detection is designed. It observes only cached
+Home Assistant and Roborock entity data. It never refreshes the vacuum, sends a
+command, or changes a Daily Cleaning switch.
+
+When a configured vacuum enters `cleaning`, cached fields are sampled about
+every two seconds. Sampling continues briefly after cleaning to capture
+returning and docked transitions. Only changes and sparse heartbeats are kept,
+with at most 1000 observations per vacuum. Buffers are cleared by a Home
+Assistant restart or integration reload.
+
+Depending on the Roborock model and library support, diagnostics attempts to
+capture:
+
+- Home Assistant vacuum state and raw Roborock state/work status
+- `in_cleaning` and `in_returning`
+- `cleaning_info.segment_id` and `target_segment_id`
+- clean time, area, and progress
+- allowlisted task, mode, returning, map, and current-room fields
+- matching Daily Cleaning room, segment, and Home Assistant Area
+
+Unsupported fields are recorded as `null` and never prevent setup.
+
+To enable the diagnostic transition log, add this to `configuration.yaml` and
+restart Home Assistant:
+
+```yaml
+logger:
+  logs:
+    custom_components.daily_cleaning.diagnostic_recorder: debug
+    custom_components.daily_cleaning.diagnostic_manager: debug
+```
+
+Messages use the prefix `DAILY_CLEANING_DIAG`. To download the full sanitized
+buffer after a test, open **Settings → Devices & services → Daily Cleaning**,
+open the integration entry menu, and choose **Download diagnostics**. The file
+does not include credentials, tokens, MQTT details, account identifiers, map
+images, or coordinates.
 
 ## Support
 

@@ -12,6 +12,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import RESET_TIME, STORAGE_KEY, STORAGE_VERSION
+from .diagnostic_manager import DailyCleaningDiagnosticManager
 from .models import RoomConfig, RoomState, cleaning_day
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ class DailyCleaningManager:
         self._listeners: set[Callable[[], None]] = set()
         self._cleaning_day: date | None = None
         self._unsub_reset: Callable[[], None] | None = None
+        self.diagnostics = DailyCleaningDiagnosticManager(hass, rooms)
 
     async def async_initialize(self) -> None:
         """Load persistent state and schedule the daily reset."""
@@ -56,14 +58,25 @@ class DailyCleaningManager:
             minute=RESET_TIME.minute,
             second=0,
         )
+        try:
+            await self.diagnostics.async_initialize()
+        except Exception:  # Diagnostics must never prevent integration setup.
+            _LOGGER.exception("DAILY_CLEANING_DIAG failed to initialize")
+            try:
+                await self.diagnostics.async_shutdown()
+            except Exception:
+                _LOGGER.exception("DAILY_CLEANING_DIAG failed to clean up")
 
-    @callback
-    def async_shutdown(self) -> None:
+    async def async_shutdown(self) -> None:
         """Cancel scheduled work when the config entry unloads."""
         if self._unsub_reset is not None:
             self._unsub_reset()
             self._unsub_reset = None
         self._listeners.clear()
+        try:
+            await self.diagnostics.async_shutdown()
+        except Exception:
+            _LOGGER.exception("DAILY_CLEANING_DIAG failed to stop cleanly")
 
     @callback
     def async_subscribe(self, listener: Callable[[], None]) -> Callable[[], None]:

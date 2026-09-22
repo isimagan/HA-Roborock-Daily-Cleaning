@@ -20,8 +20,11 @@ async def async_setup_entry(
     manager = DailyCleaningManager(hass, entry.entry_id, rooms)
     await manager.async_initialize()
     entry.runtime_data = manager
-    entry.async_on_unload(manager.async_shutdown)
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    try:
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    except Exception:
+        await manager.async_shutdown()
+        raise
     return True
 
 
@@ -29,4 +32,7 @@ async def async_unload_entry(
     hass: HomeAssistant, entry: DailyCleaningConfigEntry
 ) -> bool:
     """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        return False
+    await entry.runtime_data.async_shutdown()
+    return True
