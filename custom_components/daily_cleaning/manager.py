@@ -11,6 +11,7 @@ from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
+from .automatic_cleaning import AutomaticCleaningManager
 from .const import RESET_TIME, STORAGE_KEY, STORAGE_VERSION
 from .diagnostic_manager import DailyCleaningDiagnosticManager
 from .models import RoomConfig, RoomState, cleaning_day
@@ -33,6 +34,9 @@ class DailyCleaningManager:
         self._listeners: set[Callable[[], None]] = set()
         self._cleaning_day: date | None = None
         self._unsub_reset: Callable[[], None] | None = None
+        self.automatic = AutomaticCleaningManager(
+            hass, rooms, self.async_mark_rooms_cleaned
+        )
         self.diagnostics = DailyCleaningDiagnosticManager(hass, rooms)
 
     async def async_initialize(self) -> None:
@@ -59,6 +63,14 @@ class DailyCleaningManager:
             second=0,
         )
         try:
+            await self.automatic.async_initialize()
+        except Exception:  # Automatic detection must never prevent setup.
+            _LOGGER.exception("Daily Cleaning automatic detection failed to initialize")
+            try:
+                await self.automatic.async_shutdown()
+            except Exception:
+                _LOGGER.exception("Daily Cleaning automatic detection cleanup failed")
+        try:
             await self.diagnostics.async_initialize()
         except Exception:  # Diagnostics must never prevent integration setup.
             _LOGGER.exception("DAILY_CLEANING_DIAG failed to initialize")
@@ -73,6 +85,10 @@ class DailyCleaningManager:
             self._unsub_reset()
             self._unsub_reset = None
         self._listeners.clear()
+        try:
+            await self.automatic.async_shutdown()
+        except Exception:
+            _LOGGER.exception("Daily Cleaning automatic detection failed to stop")
         try:
             await self.diagnostics.async_shutdown()
         except Exception:
@@ -97,6 +113,22 @@ class DailyCleaningManager:
         state.needs_cleaning = needs_cleaning
         if not needs_cleaning:
             state.last_cleaned = dt_util.now()
+        await self._async_save()
+        self._notify()
+
+    async def async_mark_rooms_cleaned(self, room_keys: set[str]) -> None:
+        """Atomically mark safely completed rooms from one docked session."""
+        changed = False
+        cleaned_at = dt_util.now()
+        for room_key in room_keys:
+            state = self.states.get(room_key)
+            if state is None or not state.needs_cleaning:
+                continue
+            state.needs_cleaning = False
+            state.last_cleaned = cleaned_at
+            changed = True
+        if not changed:
+            return
         await self._async_save()
         self._notify()
 

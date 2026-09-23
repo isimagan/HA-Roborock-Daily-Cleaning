@@ -1,0 +1,136 @@
+{
+  "failed_bathroom": {
+    "targets": ["0_20"],
+    "observations": [
+      [18, 0, 1, "Living"],
+      [18, 0, 270, "Living"],
+      [6, 0, 273, "Living"],
+      [8, 0, 273, "Living"]
+    ],
+    "completed": []
+  },
+  "successful_bathroom_via_transport_rooms": {
+    "targets": ["0_20"],
+    "observations": [
+      [18, 0, 273, "Living"],
+      [18, 0, 30, "Hall"],
+      [18, 140000, 60, "Bathroom"],
+      [18, 2695000, 210, "Bathroom"],
+      [6, 2695000, 233, "Bathroom"],
+      [8, 2695000, 233, "Bathroom"]
+    ],
+    "completed": ["0_20"]
+  },
+  "normal_kitchen_living": {
+    "targets": ["0_19", "0_16"],
+    "observations": [
+      [18, 2695000, 233, "Living"],
+      [18, 0, 0, "Living"],
+      [18, 122500, 27, "Kitchen"],
+      [18, 3605000, 150, "Kitchen"],
+      [18, 4000000, 180, "Living"],
+      [18, 16807500, 870, "Living"],
+      [6, 17027500, 930, "Living"],
+      [8, 17027500, 930, "Living"]
+    ],
+    "completed": ["0_19", "0_16"]
+  },
+  "kitchen_living_interrupted_in_room_two": {
+    "targets": ["0_19", "0_16"],
+    "observations": [
+      [18, 0, 0, "Living"],
+      [18, 3147500, 120, "Kitchen"],
+      [18, 3397500, 150, "Kitchen"],
+      [18, 3600000, 160, "Living"],
+      [18, 5775000, 262, "Living"],
+      [10, 5880000, 264, "Living"],
+      [6, 6090000, 265, "Living"],
+      [8, 6090000, 265, "Living"]
+    ],
+    "completed": ["0_19"]
+  },
+  "normal_whole_home": {
+    "targets": null,
+    "observations": [
+      [5, 6090000, 265, "Living"],
+      [5, 0, 2, "Living"],
+      [5, 350000, 53, "Living"],
+      [5, 500000, 80, "Hall"],
+      [5, 3595000, 252, "Hall"],
+      [5, 3700000, 270, "Bathroom"],
+      [5, 5930000, 420, "Bathroom"],
+      [5, 6300000, 500, "Living"],
+      [5, 22770000, 1590, "Living"],
+      [5, 23035000, 1620, "Kitchen"],
+      [5, 27742500, 1962, "Kitchen"],
+      [5, 28000000, 1980, "Bedroom"],
+      [5, 35685000, 2435, "Bedroom"],
+      [6, 35795000, 2460, "Bedroom"],
+      [8, 35795000, 2460, "Living"]
+    ],
+    "completed": ["0_16", "0_17", "0_18", "0_19", "0_20"]
+  },
+  "pause_during_return": {
+    "targets": ["0_20"],
+    "observations": [
+      [18, 0, 0, "Bathroom"],
+      [18, 2000000, 180, "Bathroom"],
+      [6, 2100000, 190, "Bathroom"],
+      [10, 2100000, 190, "Living"],
+      [6, 2200000, 200, "Living"],
+      [8, 2200000, 200, "Living"]
+    ],
+    "completed": ["0_20"]
+  },
+  "going_to_target_then_return": {
+    "targets": null,
+    "observations": [
+      [16, 0, 0, "Living"],
+      [6, 0, 30, "Living"],
+      [8, 0, 30, "Living"]
+    ],
+    "completed": []
+  },
+  "spot_cleaning": {
+    "targets": null,
+    "observations": [
+      [11, 0, 0, "Living"],
+      [11, 1000000, 60, "Living"],
+      [6, 1000000, 70, "Living"],
+      [8, 1000000, 70, "Living"]
+    ],
+    "completed": []
+  },
+  "zoned_cleaning": {
+    "targets": null,
+    "observations": [
+      [17, 0, 0, "Living"],
+      [17, 1000000, 60, "Living"],
+      [6, 1000000, 70, "Living"],
+      [8, 1000000, 70, "Living"]
+    ],
+    "completed": []
+  },
+  "stale_metrics_at_session_start": {
+    "targets": ["0_20"],
+    "observations": [
+      [18, 5000000, 300, "Living"],
+      [18, 0, 1, "Bathroom"],
+      [18, 1000000, 60, "Bathroom"],
+      [6, 1000000, 70, "Bathroom"],
+      [8, 1000000, 70, "Bathroom"]
+    ],
+    "completed": ["0_20"]
+  },
+  "delayed_area_during_return": {
+    "targets": ["0_20"],
+    "observations": [
+      [18, 0, 0, "Bathroom"],
+      [18, 0, 30, "Bathroom"],
+      [6, 0, 35, "Bathroom"],
+      [6, 1000000, 60, "Bathroom"],
+      [8, 1000000, 60, "Living"]
+    ],
+    "completed": ["0_20"]
+  }
+}
