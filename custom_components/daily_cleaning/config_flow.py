@@ -288,7 +288,9 @@ class DailyCleaningConfigFlow(DailyCleaningFlowMixin, ConfigFlow, domain=DOMAIN)
         data = {CONF_ROOMS: [room.as_dict() for room in rooms]}
         if self.source == SOURCE_RECONFIGURE:
             return self.async_update_reload_and_abort(
-                self._get_reconfigure_entry(), data_updates=data
+                self._get_reconfigure_entry(),
+                data_updates=data,
+                reason="reconfigure_successful",
             )
         return self.async_create_entry(
             title="Daily Cleaning",
