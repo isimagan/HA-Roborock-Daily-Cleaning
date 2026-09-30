@@ -74,6 +74,31 @@ def test_app_started_segment_job_uses_current_room_without_exact_id() -> None:
     assert completed == {"0_20"}
 
 
+def test_app_started_segment_job_attributes_first_cleaning_delta_to_new_room() -> None:
+    """Do not credit dock/transit room when app cleaning moves into its target."""
+    machine = CleaningSessionMachine(ROOMS)
+    machine.initialize(8)
+
+    observations = [
+        # The robot starts at its dock in Living, but no area has been cleaned.
+        CleaningObservation(18, 0, 0, "Living"),
+        CleaningObservation(18, 0, 10, "Living"),
+        # The first positive cleaning-area delta arrives with Kitchen as the
+        # current room. It must belong to Kitchen, not the previous Living room.
+        CleaningObservation(18, 1000000, 60, "Kitchen"),
+        CleaningObservation(6, 1000000, 70, "Kitchen"),
+        # Returning to/docking in Living must not make Living a completed room.
+        CleaningObservation(8, 1000000, 70, "Living"),
+    ]
+    completed = set().union(
+        *(
+            machine.observe(observation, monotonic_now=index)
+            for index, observation in enumerate(observations, start=1)
+        )
+    )
+    assert completed == {"0_19"}
+
+
 def test_app_started_segment_job_ignores_unmapped_current_room() -> None:
     machine = CleaningSessionMachine(ROOMS)
     machine.initialize(8)
