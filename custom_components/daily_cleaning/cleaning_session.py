@@ -125,6 +125,7 @@ class CleaningSessionMachine:
         self._blocked_until_terminal = True
         self._pending_segments: tuple[str, ...] | None = None
         self._pending_segments_at = 0.0
+        self._segment_plan_expired = False
         self._session: _Session | None = None
 
     @property
@@ -147,6 +148,7 @@ class CleaningSessionMachine:
         self._initialized = True
         self._session = None
         self._pending_segments = None
+        self._segment_plan_expired = False
         self._blocked_until_terminal = raw_state not in _SAFE_TERMINAL_STATES
 
     def set_requested_segments(
@@ -168,11 +170,13 @@ class CleaningSessionMachine:
             return False
         self._pending_segments = tuple(canonical)
         self._pending_segments_at = monotonic_now
+        self._segment_plan_expired = False
         return True
 
     def clear_requested_segments(self) -> None:
         """Discard a target plan that can no longer be trusted."""
         self._pending_segments = None
+        self._segment_plan_expired = False
 
     def observe(
         self, observation: CleaningObservation, *, monotonic_now: float
@@ -285,7 +289,12 @@ class CleaningSessionMachine:
                 and monotonic_now - self._pending_segments_at <= _PLAN_MAX_AGE_SECONDS
             ):
                 requested = self._pending_segments
+            elif self._segment_plan_expired:
+                # A stale HA service target must not be reinterpreted as an
+                # app-started job and replaced with a current-room guess.
+                requested = ()
         self._pending_segments = None
+        self._segment_plan_expired = False
         session = _Session(
             mode=(
                 SessionMode.WHOLE_HOME
@@ -404,6 +413,7 @@ class CleaningSessionMachine:
             and monotonic_now - self._pending_segments_at > _PLAN_MAX_AGE_SECONDS
         ):
             self._pending_segments = None
+            self._segment_plan_expired = True
 
     def _invalidate_until_terminal(self) -> None:
         self._session = None
