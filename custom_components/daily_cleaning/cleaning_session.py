@@ -327,12 +327,14 @@ class CleaningSessionMachine:
         exact_segment = self._canonical_segment(observation.segment_id)
         candidate = exact_segment or self._segment_for_room(observation.current_room)
         if session.requested_segments is None:
-            # Without an HA request, only Roborock's exact segment_id is safe.
-            if exact_segment is None:
+            # App-started segment jobs do not have an HA-captured target list.
+            # Use Roborock's exact segment ID when available; otherwise the
+            # configured current-room sensor is the only supported target hint.
+            if candidate is None:
                 return
-            if session.active_segment != exact_segment:
+            if session.active_segment != candidate:
                 self._finish_active_if_confirmed(session)
-                session.active_segment = exact_segment
+                session.active_segment = candidate
             return
 
         if candidate is None:
