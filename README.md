@@ -72,9 +72,9 @@ reset.
 
 ## Current scope
 
-Version 0.2 tracks manual room status, performs the daily reset, aggregates the
-result across all linked Roborock vacuums, and conservatively marks rooms as
-cleaned after supported Roborock jobs.
+Version 0.3 tracks manual room status, performs the daily reset, aggregates
+the result across all linked Roborock vacuums, and conservatively marks rooms as
+cleaned after supported whole-home and segment-cleaning jobs.
 
 ### Automatic room completion
 
@@ -107,11 +107,13 @@ targets. If a multi-room job is interrupted in room 2, a documented room 1 may
 be completed while room 2 and later targets remain on.
 
 The tested Roborock model did not expose `cleaning_info.segment_id` or
-`target_segment_id` in its loaded status object. Segment jobs started outside
-Home Assistant therefore remain unchanged on that model. On models that expose
-an exact cached `segment_id`, that identifier can safely supply the same target
-evidence. Daily Cleaning deliberately does not guess segment targets from
-`current_room` alone.
+`target_segment_id` in its loaded status object. For segment-cleaning jobs
+started outside Home Assistant, Daily Cleaning uses the configured
+`current_room` sensor as the target hint when no exact segment ID is
+available. A room is completed only when the job also provides positive,
+session-local growth in both cleaning area and time, followed by confirmed
+docking. Unmapped room names are ignored. When an exact cached `segment_id` is
+available, it takes precedence over the room-name mapping.
 
 An integration reload or Home Assistant restart during a job discards the
 in-flight session. Missing fields, unavailable states, stale service targets,
