@@ -228,14 +228,6 @@ class CleaningSessionMachine:
             self._invalidate_until_terminal()
             return frozenset()
 
-        if raw_state in {
-            session.raw_cleaning_state,
-            RAW_PAUSED,
-            RAW_RETURNING_HOME,
-            RAW_CHARGING,
-        }:
-            self._record_metric_deltas(session, observation)
-
         if raw_state == session.raw_cleaning_state:
             if session.phase is SessionPhase.PAUSED_CLEANING:
                 session.phase = SessionPhase.CLEANING
@@ -245,8 +237,20 @@ class CleaningSessionMachine:
             }:
                 self._invalidate_until_terminal()
                 return frozenset()
+            # Resolve the room for this observation before attributing metric
+            # growth. Otherwise the first real cleaning delta after moving from
+            # the dock/transit room into a requested room is credited to the
+            # previous room.
             self._update_active_segment(session, observation)
+            self._record_metric_deltas(session, observation)
             return frozenset()
+
+        if raw_state in {
+            RAW_PAUSED,
+            RAW_RETURNING_HOME,
+            RAW_CHARGING,
+        }:
+            self._record_metric_deltas(session, observation)
 
         if raw_state == RAW_PAUSED:
             if session.phase is SessionPhase.CLEANING:
