@@ -55,7 +55,7 @@ def test_validated_cleaning_sequences(name: str) -> None:
     assert _run_fixture(name) == frozenset(FIXTURES[name]["completed"])
 
 
-def test_app_started_segment_job_requires_exact_segment_ids() -> None:
+def test_app_started_segment_job_uses_current_room_without_exact_id() -> None:
     machine = CleaningSessionMachine(ROOMS)
     machine.initialize(8)
 
@@ -65,13 +65,35 @@ def test_app_started_segment_job_requires_exact_segment_ids() -> None:
         CleaningObservation(6, 1000000, 70, "Bathroom"),
         CleaningObservation(8, 1000000, 70, "Living"),
     ]
-    assert not set().union(
+    completed = set().union(
         *(
             machine.observe(observation, monotonic_now=index)
             for index, observation in enumerate(observations, start=1)
         )
     )
+    assert completed == {"0_20"}
 
+
+def test_app_started_segment_job_ignores_unmapped_current_room() -> None:
+    machine = CleaningSessionMachine(ROOMS)
+    machine.initialize(8)
+
+    observations = [
+        CleaningObservation(18, 0, 0, "Hallway Between Rooms"),
+        CleaningObservation(18, 1000000, 60, "Hallway Between Rooms"),
+        CleaningObservation(6, 1000000, 70, "Hallway Between Rooms"),
+        CleaningObservation(8, 1000000, 70, "Living"),
+    ]
+    completed = set().union(
+        *(
+            machine.observe(observation, monotonic_now=index)
+            for index, observation in enumerate(observations, start=1)
+        )
+    )
+    assert not completed
+
+
+def test_app_started_segment_job_accepts_exact_segment_id() -> None:
     machine = CleaningSessionMachine(ROOMS)
     machine.initialize(8)
     exact_observations = [
