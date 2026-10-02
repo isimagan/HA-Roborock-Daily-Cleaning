@@ -106,6 +106,57 @@ def test_extracts_cached_fields_and_room_match() -> None:
     assert snapshot["daily_cleaning_room"]["matched_area_id"] == "living_room"
 
 
+def test_extracts_cached_clean_summary_and_last_record() -> None:
+    clean_summary = SimpleNamespace(
+        clean_time=900,
+        clean_area=4800000,
+        clean_count=12,
+        records=[12345, 12344],
+        last_clean_record=SimpleNamespace(
+            begin=100,
+            end=340,
+            duration=240,
+            area=4800000,
+            square_meter_area=4.8,
+            start_type=2,
+            clean_type=3,
+            finish_reason=1,
+            complete=1,
+            segment_id=19,
+            segment_ids=[19],
+            rooms=[19],
+            map_flag=0,
+        ),
+    )
+    entity = SimpleNamespace(
+        coordinator=SimpleNamespace(
+            properties_api=SimpleNamespace(clean_summary=clean_summary)
+        )
+    )
+    snapshot = extract_cached_snapshot(
+        vacuum_entity_id="vacuum.bob", ha_state="docked", entity=entity
+    )
+    assert snapshot["clean_summary"]["records"] == [12345, 12344]
+    assert snapshot["last_clean_record"]["duration"] == 240
+    assert snapshot["last_clean_record"]["segment_ids"] == [19]
+    assert snapshot["last_clean_record"]["rooms"] == [19]
+
+
+def test_clean_record_diagnostics_ignore_unknown_complex_values() -> None:
+    clean_summary = SimpleNamespace(
+        last_clean_record=SimpleNamespace(rooms={"secret": object()})
+    )
+    entity = SimpleNamespace(
+        coordinator=SimpleNamespace(
+            properties_api=SimpleNamespace(clean_summary=clean_summary)
+        )
+    )
+    snapshot = extract_cached_snapshot(
+        vacuum_entity_id="vacuum.bob", ha_state="docked", entity=entity
+    )
+    assert snapshot["last_clean_record"]["rooms"] is None
+
+
 def test_extracts_nested_cached_q10_status() -> None:
     status = SimpleNamespace(state=RawState.CLEANING, in_cleaning=1)
     entity = SimpleNamespace(

@@ -26,6 +26,33 @@ _STATUS_FIELDS = {
     "clean_progress": ("clean_percent", "clean_progress", "progress"),
 }
 
+_CLEAN_RECORD_FIELDS = (
+    "begin",
+    "end",
+    "duration",
+    "area",
+    "square_meter_area",
+    "start_type",
+    "clean_type",
+    "finish_reason",
+    "complete",
+    "segment_id",
+    "segment_ids",
+    "segments",
+    "room_id",
+    "room_ids",
+    "rooms",
+    "map_flag",
+    "map_id",
+)
+
+_CLEAN_SUMMARY_FIELDS = (
+    "clean_time",
+    "clean_area",
+    "clean_count",
+    "records",
+)
+
 _EXTRA_FIELDS = (
     "back_type",
     "charge_status",
@@ -88,6 +115,16 @@ def _json_value(value: Any) -> str | int | float | bool | None:
         enum_value = value.value
         if isinstance(enum_value, str | int | float | bool):
             return enum_value
+    return None
+
+
+def _diagnostic_value(value: Any) -> Any:
+    """Convert a small allowlisted cached value to JSON-safe diagnostics."""
+    simple = _json_value(value)
+    if simple is not None or value is None:
+        return simple
+    if isinstance(value, (list, tuple)):
+        return [_diagnostic_value(item) for item in value[:20]]
     return None
 
 
@@ -181,6 +218,18 @@ def extract_cached_snapshot(
     observation["cleaning_info"] = {
         "segment_id": _json_value(segment_id),
         "target_segment_id": _json_value(target_segment_id),
+    }
+
+    properties_api = _get_value(_get_value(entity, "coordinator"), "properties_api")
+    clean_summary = _get_value(properties_api, "clean_summary")
+    last_clean_record = _get_value(clean_summary, "last_clean_record")
+    observation["clean_summary"] = {
+        field: _diagnostic_value(_get_value(clean_summary, field))
+        for field in _CLEAN_SUMMARY_FIELDS
+    }
+    observation["last_clean_record"] = {
+        field: _diagnostic_value(_get_value(last_clean_record, field))
+        for field in _CLEAN_RECORD_FIELDS
     }
 
     observation["additional_status"] = {
