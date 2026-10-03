@@ -152,12 +152,12 @@ def test_pause_then_resume_cleaning_is_not_an_abort() -> None:
         CleaningObservation(18, 1000000, 60, "Bathroom"), monotonic_now=3
     )
     assert machine.phase is SessionPhase.CLEANING
-    assert not machine.observe(
-        CleaningObservation(6, 1000000, 70, "Bathroom"), monotonic_now=4
-    )
     assert machine.observe(
-        CleaningObservation(8, 1000000, 70, "Living"), monotonic_now=5
+        CleaningObservation(6, 1000000, 70, "Bathroom"), monotonic_now=4
     ) == {"0_20"}
+    assert not machine.observe(
+        CleaningObservation(8, 1000000, 70, "Living"), monotonic_now=5
+    )
 
 
 def test_reload_during_job_cannot_complete_that_job() -> None:
@@ -224,15 +224,19 @@ def test_vacuums_have_independent_session_machines() -> None:
     kitchen.observe(CleaningObservation(18, 0, 0, "Kitchen"), monotonic_now=1)
     bathroom.observe(CleaningObservation(18, 1000000, 60, "Bathroom"), monotonic_now=2)
     kitchen.observe(CleaningObservation(18, 2000000, 120, "Kitchen"), monotonic_now=2)
-    bathroom.observe(CleaningObservation(6, 1000000, 70, "Bathroom"), monotonic_now=3)
-    kitchen.observe(CleaningObservation(6, 2000000, 130, "Kitchen"), monotonic_now=3)
-
     assert bathroom.observe(
-        CleaningObservation(8, 1000000, 70, "Living"), monotonic_now=4
+        CleaningObservation(6, 1000000, 70, "Bathroom"), monotonic_now=3
     ) == {"0_20"}
     assert kitchen.observe(
-        CleaningObservation(8, 2000000, 130, "Living"), monotonic_now=4
+        CleaningObservation(6, 2000000, 130, "Kitchen"), monotonic_now=3
     ) == {"0_19"}
+
+    assert not bathroom.observe(
+        CleaningObservation(8, 1000000, 70, "Living"), monotonic_now=4
+    )
+    assert not kitchen.observe(
+        CleaningObservation(8, 2000000, 130, "Living"), monotonic_now=4
+    )
 
 
 def test_whole_home_leaves_rooms_that_were_never_reached_on() -> None:
@@ -242,12 +246,12 @@ def test_whole_home_leaves_rooms_that_were_never_reached_on() -> None:
     assert not machine.observe(
         CleaningObservation(5, 1000000, 60, "Living"), monotonic_now=2
     )
-    assert not machine.observe(
-        CleaningObservation(6, 1100000, 70, "Living"), monotonic_now=3
-    )
     assert machine.observe(
-        CleaningObservation(8, 1100000, 70, "Living"), monotonic_now=4
+        CleaningObservation(6, 1100000, 70, "Living"), monotonic_now=3
     ) == {"0_16"}
+    assert not machine.observe(
+        CleaningObservation(8, 1100000, 70, "Living"), monotonic_now=4
+    )
 
 
 def test_app_segment_completes_when_cleaning_ends_before_dock() -> None:
