@@ -28,6 +28,10 @@ _IGNORED_JOB_STATES = {
 }
 _SAFE_TERMINAL_STATES = {_RAW_IDLE, RAW_CHARGING}
 _PLAN_MAX_AGE_SECONDS = 30.0
+# Roborock clean_area is reported in square millimetres. Require meaningful
+# room-local movement as well as elapsed cleaning time before a room counts.
+_MIN_ROOM_CLEAN_AREA = 250_000.0  # 0.25 m²
+_MIN_ROOM_CLEAN_SECONDS = 20.0
 
 
 class SessionMode(Enum):
@@ -75,7 +79,7 @@ class _Evidence:
     @property
     def confirms_cleaning(self) -> bool:
         """Require both kinds of session-local growth."""
-        return self.area > 0 and self.duration > 0
+        return self.area >= _MIN_ROOM_CLEAN_AREA and self.duration >= _MIN_ROOM_CLEAN_SECONDS
 
 
 @dataclass(slots=True)
@@ -261,13 +265,19 @@ class CleaningSessionMachine:
 
         if raw_state == RAW_RETURNING_HOME:
             if session.phase is SessionPhase.CLEANING:
+                # A normal transition from cleaning to returning is the end of
+                # the cleaning job. Freeze room evidence here so travel through
+                # other rooms on the way to the dock can never complete them.
                 session.return_was_normal = True
-                session.phase = SessionPhase.PENDING_RETURN
-            elif session.phase is SessionPhase.PAUSED_CLEANING:
-                session.return_was_normal = False
-                session.phase = SessionPhase.PENDING_RETURN
-            elif session.phase is SessionPhase.PAUSED_RETURN:
-                session.phase = SessionPhase.PENDING_RETURN
+                completed = self._completed_at_dock(session)
+                self._invalidate_until_terminal()
+                return frozenset(completed)
+            if session.phase is SessionPhase.PAUSED_CLEANING:
+                # Returning directly from a pause is treated as an abort.
+                self._invalidate_until_terminal()
+                return frozenset()
+            if session.phase is SessionPhase.PAUSED_RETURN:
+                self._invalidate_until_terminal()
             return frozenset()
 
         if raw_state == RAW_CHARGING:
