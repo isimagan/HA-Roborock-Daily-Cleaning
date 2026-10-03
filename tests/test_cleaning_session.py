@@ -248,3 +248,52 @@ def test_whole_home_leaves_rooms_that_were_never_reached_on() -> None:
     assert machine.observe(
         CleaningObservation(8, 1100000, 70, "Living"), monotonic_now=4
     ) == {"0_16"}
+
+
+def test_app_segment_completes_when_cleaning_ends_before_dock() -> None:
+    """Complete the cleaned room at returning, not after travelling to the dock."""
+    machine = CleaningSessionMachine(ROOMS)
+    machine.initialize(8)
+
+    assert not machine.observe(
+        CleaningObservation(18, 0, 0, "Living"), monotonic_now=1
+    )
+    assert not machine.observe(
+        CleaningObservation(18, 0, 10, "Living"), monotonic_now=2
+    )
+    assert not machine.observe(
+        CleaningObservation(18, 1000000, 60, "Kitchen"), monotonic_now=3
+    )
+
+    # Cleaning is finished here while current_room still says Kitchen.
+    assert machine.observe(
+        CleaningObservation(6, 1000000, 70, "Kitchen"), monotonic_now=4
+    ) == {"0_19"}
+
+    # Passing through Living and docking there must not complete Living.
+    assert not machine.observe(
+        CleaningObservation(6, 1000000, 80, "Living"), monotonic_now=5
+    )
+    assert not machine.observe(
+        CleaningObservation(8, 1000000, 80, "Living"), monotonic_now=6
+    )
+
+
+def test_app_segment_requires_meaningful_room_cleaning() -> None:
+    """Driving through a room or barely moving there must not complete it."""
+    machine = CleaningSessionMachine(ROOMS)
+    machine.initialize(8)
+
+    assert not machine.observe(
+        CleaningObservation(18, 0, 0, "Living"), monotonic_now=1
+    )
+    # Small area/time growth is below the room-cleaning threshold.
+    assert not machine.observe(
+        CleaningObservation(18, 100000, 10, "Hall"), monotonic_now=2
+    )
+    assert not machine.observe(
+        CleaningObservation(18, 1100000, 70, "Kitchen"), monotonic_now=3
+    )
+    assert machine.observe(
+        CleaningObservation(6, 1100000, 80, "Kitchen"), monotonic_now=4
+    ) == {"0_19"}
