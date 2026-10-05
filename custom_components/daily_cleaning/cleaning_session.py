@@ -98,7 +98,7 @@ class _Session:
 
 
 class CleaningSessionMachine:
-    """Track one vacuum and emit segments only after confirmed docking."""
+    """Track one vacuum and emit segments when a cleaning job safely completes."""
 
     def __init__(self, rooms: list[RoomTarget]) -> None:
         self._rooms = {str(room.segment_id): room for room in rooms}
@@ -269,7 +269,7 @@ class CleaningSessionMachine:
                 # the cleaning job. Freeze room evidence here so travel through
                 # other rooms on the way to the dock can never complete them.
                 session.return_was_normal = True
-                completed = self._completed_at_dock(session)
+                completed = self._completed_at_cleaning_end(session)
                 self._invalidate_until_terminal()
                 return frozenset(completed)
             if session.phase is SessionPhase.PAUSED_CLEANING:
@@ -287,7 +287,7 @@ class CleaningSessionMachine:
             }:
                 self._reset_session()
                 return frozenset()
-            completed = self._completed_at_dock(session)
+            completed = self._completed_at_cleaning_end(session)
             self._reset_session()
             return frozenset(completed)
 
@@ -387,7 +387,7 @@ class CleaningSessionMachine:
         if active is not None and self._is_confirmed(session, active):
             session.completed_before_active.add(active)
 
-    def _completed_at_dock(self, session: _Session) -> set[str]:
+    def _completed_at_cleaning_end(self, session: _Session) -> set[str]:
         if session.mode is SessionMode.WHOLE_HOME:
             if not session.return_was_normal:
                 return set()
