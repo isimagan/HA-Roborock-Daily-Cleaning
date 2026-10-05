@@ -276,9 +276,11 @@ class CleaningSessionMachine:
                 self._invalidate_until_terminal()
                 return frozenset(completed)
             if session.phase is SessionPhase.PAUSED_CLEANING:
-                # Returning directly from a pause is treated as an abort.
+                # Returning directly from a pause aborts the active room, but
+                # previously confirmed segment targets remain genuinely cleaned.
+                completed = set(session.completed_before_active)
                 self._invalidate_until_terminal()
-                return frozenset()
+                return frozenset(completed)
             if session.phase is SessionPhase.PAUSED_RETURN:
                 self._invalidate_until_terminal()
             return frozenset()
