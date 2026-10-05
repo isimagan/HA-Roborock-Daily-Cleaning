@@ -67,6 +67,14 @@ class DailyCleaningDiagnosticManager:
     @callback
     def _async_state_changed(self, event: Any) -> None:
         entity_id = event.data.get("entity_id")
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        if (
+            entity_id in self._raw_v1_dps
+            and getattr(new_state, "state", None) == "cleaning"
+            and getattr(old_state, "state", None) != "cleaning"
+        ):
+            self._raw_v1_dps[entity_id].clear()
         if sampler := self.samplers.get(entity_id):
             try:
                 sampler.observe("STATE_CHANGE")
