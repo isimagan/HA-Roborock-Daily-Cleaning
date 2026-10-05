@@ -324,3 +324,26 @@ def test_app_segment_does_not_complete_dock_room_after_kitchen() -> None:
         )
     )
     assert completed == {"0_19"}
+
+
+def test_app_segment_can_complete_multiple_actually_cleaned_rooms() -> None:
+    """Sequential app-selected rooms can each complete without crediting dock travel."""
+    machine = CleaningSessionMachine(ROOMS)
+    machine.initialize(8)
+
+    observations = [
+        CleaningObservation(18, 0, 0, "Living"),
+        CleaningObservation(18, 500000, 30, "Kitchen"),
+        CleaningObservation(18, 1000000, 60, "Kitchen"),
+        CleaningObservation(18, 1500000, 90, "Bathroom"),
+        CleaningObservation(18, 2000000, 120, "Bathroom"),
+        CleaningObservation(6, 2000000, 130, "Bathroom"),
+        CleaningObservation(8, 2000000, 130, "Living"),
+    ]
+    completed = set().union(
+        *(
+            machine.observe(observation, monotonic_now=index)
+            for index, observation in enumerate(observations, start=1)
+        )
+    )
+    assert completed == {"0_19", "0_20"}
