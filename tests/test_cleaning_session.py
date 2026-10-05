@@ -301,3 +301,26 @@ def test_app_segment_requires_meaningful_room_cleaning() -> None:
     assert machine.observe(
         CleaningObservation(6, 1100000, 80, "Kitchen"), monotonic_now=4
     ) == {"0_19"}
+
+
+def test_app_segment_does_not_complete_dock_room_after_kitchen() -> None:
+    """Only Kitchen completes when an app segment job starts/ends in Living."""
+    machine = CleaningSessionMachine(ROOMS)
+    machine.initialize(8)
+
+    observations = [
+        CleaningObservation(18, 0, 0, "Living"),
+        CleaningObservation(18, 0, 10, "Living"),
+        CleaningObservation(18, 400000, 30, "Kitchen"),
+        CleaningObservation(18, 1000000, 60, "Kitchen"),
+        CleaningObservation(6, 1000000, 70, "Kitchen"),
+        CleaningObservation(6, 1000000, 80, "Living"),
+        CleaningObservation(8, 1000000, 80, "Living"),
+    ]
+    completed = set().union(
+        *(
+            machine.observe(observation, monotonic_now=index)
+            for index, observation in enumerate(observations, start=1)
+        )
+    )
+    assert completed == {"0_19"}
