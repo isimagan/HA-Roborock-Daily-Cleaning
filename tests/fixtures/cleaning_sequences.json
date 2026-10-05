@@ -131,6 +131,6 @@
       [6, 1000000, 60, "Bathroom"],
       [8, 1000000, 60, "Living"]
     ],
-    "completed": ["0_20"]
+    "completed": []
   }
 }
