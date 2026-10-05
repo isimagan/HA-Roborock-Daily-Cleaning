@@ -53,6 +53,25 @@ _CLEAN_SUMMARY_FIELDS = (
     "records",
 )
 
+_MAP_OBJECT_FIELDS = (
+    "x",
+    "y",
+    "angle",
+    "id",
+    "number",
+    "segment_id",
+    "room_id",
+    "x0",
+    "y0",
+    "x1",
+    "y1",
+    "x2",
+    "y2",
+    "x3",
+    "y3",
+    "points",
+)
+
 _EXTRA_FIELDS = (
     "back_type",
     "charge_status",
@@ -126,6 +145,141 @@ def _diagnostic_value(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_diagnostic_value(item) for item in value[:20]]
     return None
+
+
+def _bounded_cached_value(value: Any, *, depth: int = 0) -> Any:
+    """Summarize selected cached map values without exporting large/raw map data."""
+    simple = _json_value(value)
+    if simple is not None or value is None:
+        return simple
+    if depth >= 3:
+        return {"type": type(value).__name__}
+    if isinstance(value, (bytes, bytearray)):
+        return {
+            "type": type(value).__name__,
+            "length": len(value),
+            "items": list(value[:64]),
+        }
+    if isinstance(value, Mapping):
+        items = list(value.items())
+        return {
+            "type": type(value).__name__,
+            "length": len(items),
+            "items": {
+                str(key): _bounded_cached_value(item, depth=depth + 1)
+                for key, item in items[:20]
+            },
+        }
+    if isinstance(value, (list, tuple, set, frozenset)):
+        items = list(value)
+        return {
+            "type": type(value).__name__,
+            "length": len(items),
+            "items": [
+                _bounded_cached_value(item, depth=depth + 1)
+                for item in items[:20]
+            ],
+        }
+
+    attributes = {
+        field: _bounded_cached_value(field_value, depth=depth + 1)
+        for field in _MAP_OBJECT_FIELDS
+        if (field_value := _get_value(value, field)) is not None
+        and not callable(field_value)
+    }
+    if attributes:
+        return {"type": type(value).__name__, **attributes}
+    return {"type": type(value).__name__}
+
+
+def _extract_map_context(properties_api: object | None) -> dict[str, Any]:
+    """Read compact target clues from already cached Roborock map data."""
+    status = _get_value(properties_api, "status")
+    home = _get_value(properties_api, "home")
+    current_map_flag = _json_value(_get_value(status, "current_map"))
+
+    home_map_content = _get_value(home, "home_map_content")
+    available_map_flags: list[str | int | float | bool] = []
+    cached_map_content = None
+    if isinstance(home_map_content, Mapping):
+        for key in list(home_map_content)[:20]:
+            simple_key = _json_value(key)
+            if simple_key is not None:
+                available_map_flags.append(simple_key)
+        cached_map_content = home_map_content.get(current_map_flag)
+        if cached_map_content is None and len(home_map_content) == 1:
+            cached_map_content = next(iter(home_map_content.values()))
+
+    live_map_trait = _get_value(home, "_map_content")
+    live_map_data = _get_value(live_map_trait, "map_data")
+    cached_map_data = _get_value(cached_map_content, "map_data")
+    map_data = live_map_data or cached_map_data
+    source = (
+        "live_map_trait"
+        if live_map_data is not None
+        else "home_map_cache"
+        if cached_map_data is not None
+        else None
+    )
+
+    if map_data is None:
+        return {
+            "current_map_flag": current_map_flag,
+            "available_map_flags": available_map_flags,
+            "source": source,
+            "map_data_type": None,
+            "map_data_keys": [],
+            "additional_parameters": None,
+            "vacuum_room": None,
+            "room_ids": [],
+            "blocks": None,
+            "zones": None,
+            "goto": None,
+            "vacuum_position": None,
+            "path": None,
+            "goto_path": None,
+            "predicted_path": None,
+        }
+
+    try:
+        map_data_keys = sorted(
+            str(key)
+            for key in vars(map_data)
+            if not str(key).startswith("_")
+        )[:80]
+    except TypeError:
+        map_data_keys = []
+
+    rooms = _get_value(map_data, "rooms")
+    room_ids = (
+        [simple for key in list(rooms)[:50] if (simple := _json_value(key)) is not None]
+        if isinstance(rooms, Mapping)
+        else []
+    )
+
+    return {
+        "current_map_flag": current_map_flag,
+        "available_map_flags": available_map_flags,
+        "source": source,
+        "map_data_type": type(map_data).__name__,
+        "map_data_keys": map_data_keys,
+        "additional_parameters": _bounded_cached_value(
+            _get_value(map_data, "additional_parameters")
+        ),
+        "vacuum_room": _json_value(_get_value(map_data, "vacuum_room")),
+        "room_ids": room_ids,
+        "blocks": _bounded_cached_value(_get_value(map_data, "blocks")),
+        "zones": _bounded_cached_value(_get_value(map_data, "zones")),
+        "goto": _bounded_cached_value(_get_value(map_data, "goto")),
+        "vacuum_position": _bounded_cached_value(
+            _get_value(map_data, "vacuum_position")
+        ),
+        "path": _bounded_cached_value(_get_value(map_data, "path")),
+        "goto_path": _bounded_cached_value(_get_value(map_data, "goto_path")),
+        "predicted_path": _bounded_cached_value(
+            _get_value(map_data, "predicted_path")
+        ),
+    }
 
 
 def _enum_value(value: Any) -> dict[str, str | int | float | bool | None]:
@@ -231,6 +385,7 @@ def extract_cached_snapshot(
         field: _diagnostic_value(_get_value(last_clean_record, field))
         for field in _CLEAN_RECORD_FIELDS
     }
+    observation["map_context"] = _extract_map_context(properties_api)
 
     observation["additional_status"] = {
         field: _json_value(_first_value(sources, (field,))) for field in _EXTRA_FIELDS

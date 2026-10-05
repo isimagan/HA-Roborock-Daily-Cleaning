@@ -142,6 +142,51 @@ def test_extracts_cached_clean_summary_and_last_record() -> None:
     assert snapshot["last_clean_record"]["rooms"] == [19]
 
 
+def test_extracts_cached_map_context_without_raw_map_bytes() -> None:
+    map_data = SimpleNamespace(
+        additional_parameters={
+            "map_index": 3,
+            "map_sequence": 41,
+            "is_valid": True,
+        },
+        vacuum_room=19,
+        rooms={16: object(), 19: object(), 20: object()},
+        blocks=bytes([19]),
+        zones=[SimpleNamespace(x0=1, y0=2, x1=3, y1=4)],
+        goto=SimpleNamespace(x=100, y=200),
+        vacuum_position=SimpleNamespace(x=110, y=210, angle=90),
+        path=SimpleNamespace(points=[SimpleNamespace(x=1, y=2)]),
+        goto_path=None,
+        predicted_path=None,
+    )
+    home = SimpleNamespace(
+        home_map_content={7: SimpleNamespace(map_data=map_data)},
+        _map_content=SimpleNamespace(map_data=map_data),
+    )
+    entity = SimpleNamespace(
+        coordinator=SimpleNamespace(
+            properties_api=SimpleNamespace(
+                status=SimpleNamespace(current_map=7),
+                home=home,
+                clean_summary=None,
+            )
+        )
+    )
+
+    snapshot = extract_cached_snapshot(
+        vacuum_entity_id="vacuum.bob", ha_state="cleaning", entity=entity
+    )
+    context = snapshot["map_context"]
+    assert context["current_map_flag"] == 7
+    assert context["source"] == "live_map_trait"
+    assert context["vacuum_room"] == 19
+    assert context["room_ids"] == [16, 19, 20]
+    assert context["blocks"]["items"] == [19]
+    assert context["additional_parameters"]["items"]["map_sequence"] == 41
+    assert context["vacuum_position"]["x"] == 110
+    assert "raw_api_response" not in repr(context)
+
+
 def test_clean_record_diagnostics_ignore_unknown_complex_values() -> None:
     clean_summary = SimpleNamespace(
         last_clean_record=SimpleNamespace(rooms={"secret": object()})
