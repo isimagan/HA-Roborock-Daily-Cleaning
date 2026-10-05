@@ -284,7 +284,10 @@ def test_app_segment_completes_when_cleaning_ends_before_dock() -> None:
         CleaningObservation(18, 0, 10, "Living", target_segment_id=19), monotonic_now=2
     )
     assert not machine.observe(
-        CleaningObservation(18, 1000000, 60, "Kitchen", target_segment_id=19), monotonic_now=3
+        CleaningObservation(
+            18, 1000000, 60, "Kitchen", target_segment_id=19
+        ),
+        monotonic_now=3
     )
 
     # Cleaning is finished here while current_room still says Kitchen.
@@ -311,10 +314,14 @@ def test_app_segment_requires_meaningful_room_cleaning() -> None:
     )
     # Small area/time growth is below the room-cleaning threshold.
     assert not machine.observe(
-        CleaningObservation(18, 100000, 10, "Hall", target_segment_id=19), monotonic_now=2
+        CleaningObservation(18, 100000, 10, "Hall", target_segment_id=19),
+        monotonic_now=2
     )
     assert not machine.observe(
-        CleaningObservation(18, 1100000, 70, "Kitchen", target_segment_id=19), monotonic_now=3
+        CleaningObservation(
+            18, 1100000, 70, "Kitchen", target_segment_id=19
+        ),
+        monotonic_now=3
     )
     assert machine.observe(
         CleaningObservation(6, 1100000, 80, "Kitchen"), monotonic_now=4
