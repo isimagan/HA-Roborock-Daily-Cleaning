@@ -79,7 +79,10 @@ class _Evidence:
     @property
     def confirms_cleaning(self) -> bool:
         """Require both kinds of session-local growth."""
-        return self.area >= _MIN_ROOM_CLEAN_AREA and self.duration >= _MIN_ROOM_CLEAN_SECONDS
+        return (
+            self.area >= _MIN_ROOM_CLEAN_AREA
+            and self.duration >= _MIN_ROOM_CLEAN_SECONDS
+        )
 
 
 @dataclass(slots=True)
