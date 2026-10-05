@@ -117,7 +117,7 @@ class DailyCleaningManager:
         self._notify()
 
     async def async_mark_rooms_cleaned(self, room_keys: set[str]) -> None:
-        """Atomically mark safely completed rooms from one docked session."""
+        """Atomically mark rooms safely completed by one cleaning session."""
         changed = False
         cleaned_at = dt_util.now()
         for room_key in room_keys:
