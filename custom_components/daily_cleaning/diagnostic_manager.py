@@ -16,6 +16,7 @@ from .diagnostic_recorder import (
     DiagnosticSampler,
     attach_room_matches,
     extract_cached_snapshot,
+    sanitize_raw_v1_dps,
 )
 from .models import RoomConfig
 
@@ -37,6 +38,8 @@ class DailyCleaningDiagnosticManager:
         self._rooms_by_vacuum: dict[str, list[RoomConfig]] = {}
         self._device_ids: dict[str, str | None] = {}
         self._unsub_state_changes: Any = None
+        self._unsub_dps: list[Any] = []
+        self._raw_v1_dps: dict[str, dict[str, dict[str, Any]]] = {}
 
     async def async_initialize(self) -> None:
         """Resolve current entity IDs and subscribe without refreshing data."""
@@ -52,6 +55,7 @@ class DailyCleaningDiagnosticManager:
                 lambda entity_id=entity_id: self._snapshot(entity_id),
             )
             sampler.observe("SETUP")
+            self._attach_v1_dps_listener(entity_id)
 
         if self.samplers:
             self._unsub_state_changes = async_track_state_change_event(
@@ -95,7 +99,47 @@ class DailyCleaningDiagnosticManager:
             ha_attributes=state.attributes if state else None,
             related_entities=self._related_room_entities(entity_id),
         )
+        snapshot["raw_v1_dps"] = dict(self._raw_v1_dps.get(entity_id, {}))
         return attach_room_matches(snapshot, self._rooms_by_vacuum[entity_id])
+
+    def _attach_v1_dps_listener(self, entity_id: str) -> None:
+        """Observe selected cached V1 DPS pushes without sending device commands."""
+        component = self.hass.data.get(DATA_INSTANCES, {}).get("vacuum")
+        entity = component.get_entity(entity_id) if component is not None else None
+        coordinator = getattr(entity, "coordinator", None)
+        properties_api = getattr(coordinator, "properties_api", None)
+        add_listener = getattr(properties_api, "_add_dps_listener", None)
+        if not callable(add_listener):
+            return
+
+        @callback
+        def raw_dps_changed(values: Any) -> None:
+            if not isinstance(values, dict):
+                return
+            selected = sanitize_raw_v1_dps(values)
+            if not selected:
+                return
+            self._raw_v1_dps.setdefault(entity_id, {}).update(selected)
+            if sampler := self.samplers.get(entity_id):
+                try:
+                    sampler.observe("RAW_DPS")
+                except Exception:
+                    _LOGGER.exception(
+                        "DAILY_CLEANING_DIAG failed to record raw DPS for %s",
+                        entity_id,
+                    )
+
+        try:
+            unsub = add_listener(raw_dps_changed)
+        except Exception:
+            _LOGGER.debug(
+                "DAILY_CLEANING_DIAG could not attach V1 DPS listener for %s",
+                entity_id,
+                exc_info=True,
+            )
+            return
+        if callable(unsub):
+            self._unsub_dps.append(unsub)
 
     def _related_room_entities(self, vacuum_entity_id: str) -> list[dict[str, Any]]:
         """Return allowlisted cached room data from entities on the same device."""
@@ -146,6 +190,12 @@ class DailyCleaningDiagnosticManager:
 
     async def async_shutdown(self) -> None:
         """Unsubscribe and await every running sampler."""
+        for unsub in self._unsub_dps:
+            try:
+                unsub()
+            except Exception:
+                _LOGGER.debug("DAILY_CLEANING_DIAG DPS unsubscribe failed", exc_info=True)
+        self._unsub_dps.clear()
         if self._unsub_state_changes is not None:
             self._unsub_state_changes()
             self._unsub_state_changes = None
