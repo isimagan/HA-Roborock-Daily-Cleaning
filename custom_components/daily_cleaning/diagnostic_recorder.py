@@ -53,6 +53,14 @@ _CLEAN_SUMMARY_FIELDS = (
     "records",
 )
 
+_RAW_V1_DPS_NAMES = {
+    128: "additional_props",
+    130: "task_complete",
+    131: "task_cancel_low_power",
+    132: "task_cancel_in_motion",
+}
+_SENSITIVE_KEY_PARTS = ("token", "password", "secret", "local_key", "localkey")
+
 _EXTRA_FIELDS = (
     "back_type",
     "charge_status",
@@ -126,6 +134,51 @@ def _diagnostic_value(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_diagnostic_value(item) for item in value[:20]]
     return None
+
+
+def sanitize_raw_v1_dps(values: Mapping[Any, Any]) -> dict[str, dict[str, Any]]:
+    """Keep only task-related V1 DPS values in a bounded, diagnostics-safe form."""
+    result: dict[str, dict[str, Any]] = {}
+    for raw_key, value in values.items():
+        key = _json_value(raw_key)
+        if not isinstance(key, int):
+            try:
+                key = int(key) if isinstance(key, str) else None
+            except ValueError:
+                key = None
+        if key not in _RAW_V1_DPS_NAMES:
+            continue
+        result[str(key)] = {
+            "name": _RAW_V1_DPS_NAMES[key],
+            "value": _bounded_diagnostic_value(value),
+        }
+    return result
+
+
+def _bounded_diagnostic_value(value: Any, *, depth: int = 0) -> Any:
+    """Convert raw task DPS values without allowing large or sensitive payloads."""
+    if depth >= 3:
+        return "<truncated>"
+    simple = _json_value(value)
+    if isinstance(simple, str):
+        return simple[:256]
+    if simple is not None or value is None:
+        return simple
+    if isinstance(value, Mapping):
+        result: dict[str, Any] = {}
+        for index, (key, item) in enumerate(value.items()):
+            if index >= 20:
+                result["<truncated>"] = True
+                break
+            key_text = str(key)[:80]
+            if any(part in key_text.casefold() for part in _SENSITIVE_KEY_PARTS):
+                result[key_text] = "<redacted>"
+            else:
+                result[key_text] = _bounded_diagnostic_value(item, depth=depth + 1)
+        return result
+    if isinstance(value, (list, tuple)):
+        return [_bounded_diagnostic_value(item, depth=depth + 1) for item in value[:20]]
+    return f"<{type(value).__name__}>"
 
 
 def _enum_value(value: Any) -> dict[str, str | int | float | bool | None]:
