@@ -9,6 +9,7 @@ from custom_components.daily_cleaning.diagnostic_recorder import (
     DiagnosticSampler,
     attach_room_matches,
     extract_cached_snapshot,
+    sanitize_raw_v1_dps,
 )
 from custom_components.daily_cleaning.diagnostics import build_diagnostics_payload
 
@@ -42,6 +43,31 @@ def _snapshot(
         "related_entities": [],
         "daily_cleaning_room": None,
         "daily_cleaning_rooms": [],
+    }
+
+
+def test_sanitize_raw_v1_task_dps_only_keeps_allowlisted_codes() -> None:
+    values = {
+        121: 18,
+        128: {"mode": 3, "token": "do-not-export"},
+        130: [19, 1],
+        999: {"unknown": True},
+    }
+    assert sanitize_raw_v1_dps(values) == {
+        "128": {
+            "name": "additional_props",
+            "value": {"mode": 3, "token": "<redacted>"},
+        },
+        "130": {"name": "task_complete", "value": [19, 1]},
+    }
+
+
+def test_sanitize_raw_v1_task_dps_accepts_enum_keys() -> None:
+    class Dps(IntEnum):
+        ADDITIONAL_PROPS = 128
+
+    assert sanitize_raw_v1_dps({Dps.ADDITIONAL_PROPS: 7}) == {
+        "128": {"name": "additional_props", "value": 7}
     }
 
 
