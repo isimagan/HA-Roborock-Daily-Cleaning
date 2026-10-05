@@ -364,11 +364,16 @@ class CleaningSessionMachine:
             # update, so a transit/dock room with no cleaning growth remains
             # unconfirmed while the room where cleaning actually starts gains
             # the evidence.
-            if candidate is not None and (
-                session.active_segment is None
-                or not self._is_confirmed(session, session.active_segment)
-            ):
+            if candidate is None:
+                return
+            if session.active_segment is None:
                 session.active_segment = candidate
+                return
+            if session.active_segment == candidate:
+                return
+            if self._is_confirmed(session, session.active_segment):
+                session.completed_before_active.add(session.active_segment)
+            session.active_segment = candidate
             return
 
         if candidate is None:
