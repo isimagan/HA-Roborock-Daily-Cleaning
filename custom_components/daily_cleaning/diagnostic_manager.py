@@ -202,7 +202,9 @@ class DailyCleaningDiagnosticManager:
             try:
                 unsub()
             except Exception:
-                _LOGGER.debug("DAILY_CLEANING_DIAG DPS unsubscribe failed", exc_info=True)
+                _LOGGER.debug(
+                    "DAILY_CLEANING_DIAG DPS unsubscribe failed", exc_info=True
+                )
         self._unsub_dps.clear()
         if self._unsub_state_changes is not None:
             self._unsub_state_changes()
