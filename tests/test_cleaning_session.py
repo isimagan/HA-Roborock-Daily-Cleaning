@@ -365,3 +365,29 @@ def test_app_segment_can_complete_multiple_actually_cleaned_rooms() -> None:
         )
     )
     assert completed == {"0_19", "0_20"}
+
+
+def test_real_app_segment_trace_with_stue_growth_fails_closed() -> None:
+    """Regression: S8 reports >1 m² in Living before current_room becomes Kitchen."""
+    machine = CleaningSessionMachine(ROOMS)
+    machine.initialize(8)
+
+    observations = [
+        CleaningObservation(18, 0, 0, "Living"),
+        CleaningObservation(18, 140000, 26, "Living"),
+        CleaningObservation(18, 840000, 38, "Living"),
+        CleaningObservation(18, 1075000, 47, "Living"),
+        CleaningObservation(18, 1075000, 47, "Kitchen"),
+        CleaningObservation(18, 1560000, 60, "Kitchen"),
+        CleaningObservation(18, 2090000, 80, "Kitchen"),
+        CleaningObservation(18, 3550000, 140, "Kitchen"),
+        CleaningObservation(6, 3650000, 142, "Kitchen"),
+        CleaningObservation(8, 3650000, 142, "Living"),
+    ]
+    completed = set().union(
+        *(
+            machine.observe(observation, monotonic_now=index)
+            for index, observation in enumerate(observations, start=1)
+        )
+    )
+    assert not completed
