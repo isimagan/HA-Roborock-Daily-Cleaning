@@ -55,7 +55,7 @@ def test_validated_cleaning_sequences(name: str) -> None:
     assert _run_fixture(name) == frozenset(FIXTURES[name]["completed"])
 
 
-def test_app_started_segment_job_uses_current_room_without_exact_id() -> None:
+def test_app_started_segment_job_fails_closed_without_exact_id() -> None:
     machine = CleaningSessionMachine(ROOMS)
     machine.initialize(8)
 
@@ -71,11 +71,11 @@ def test_app_started_segment_job_uses_current_room_without_exact_id() -> None:
             for index, observation in enumerate(observations, start=1)
         )
     )
-    assert completed == {"0_20"}
+    assert not completed
 
 
-def test_app_started_segment_job_attributes_first_cleaning_delta_to_new_room() -> None:
-    """Do not credit dock/transit room when app cleaning moves into its target."""
+def test_app_started_segment_job_does_not_guess_target_from_room_changes() -> None:
+    """Do not infer an app target from current_room or cleaning metric growth."""
     machine = CleaningSessionMachine(ROOMS)
     machine.initialize(8)
 
@@ -96,7 +96,7 @@ def test_app_started_segment_job_attributes_first_cleaning_delta_to_new_room() -
             for index, observation in enumerate(observations, start=1)
         )
     )
-    assert completed == {"0_19"}
+    assert not completed
 
 
 def test_app_started_segment_job_ignores_unmapped_current_room() -> None:
@@ -134,6 +134,24 @@ def test_app_started_segment_job_accepts_exact_segment_id() -> None:
         )
     )
     assert completed == {"0_20"}
+
+
+def test_app_started_segment_job_accepts_exact_target_segment_id() -> None:
+    machine = CleaningSessionMachine(ROOMS)
+    machine.initialize(8)
+    observations = [
+        CleaningObservation(18, 0, 0, "Living", target_segment_id=19),
+        CleaningObservation(18, 1000000, 60, "Living", target_segment_id=19),
+        CleaningObservation(6, 1000000, 70, "Kitchen", target_segment_id=19),
+        CleaningObservation(8, 1000000, 70, "Living"),
+    ]
+    completed = set().union(
+        *(
+            machine.observe(observation, monotonic_now=index)
+            for index, observation in enumerate(observations, start=1)
+        )
+    )
+    assert completed == {"0_19"}
 
 
 def test_pause_then_resume_cleaning_is_not_an_abort() -> None:
@@ -260,13 +278,13 @@ def test_app_segment_completes_when_cleaning_ends_before_dock() -> None:
     machine.initialize(8)
 
     assert not machine.observe(
-        CleaningObservation(18, 0, 0, "Living"), monotonic_now=1
+        CleaningObservation(18, 0, 0, "Living", target_segment_id=19), monotonic_now=1
     )
     assert not machine.observe(
-        CleaningObservation(18, 0, 10, "Living"), monotonic_now=2
+        CleaningObservation(18, 0, 10, "Living", target_segment_id=19), monotonic_now=2
     )
     assert not machine.observe(
-        CleaningObservation(18, 1000000, 60, "Kitchen"), monotonic_now=3
+        CleaningObservation(18, 1000000, 60, "Kitchen", target_segment_id=19), monotonic_now=3
     )
 
     # Cleaning is finished here while current_room still says Kitchen.
@@ -289,14 +307,14 @@ def test_app_segment_requires_meaningful_room_cleaning() -> None:
     machine.initialize(8)
 
     assert not machine.observe(
-        CleaningObservation(18, 0, 0, "Living"), monotonic_now=1
+        CleaningObservation(18, 0, 0, "Living", target_segment_id=19), monotonic_now=1
     )
     # Small area/time growth is below the room-cleaning threshold.
     assert not machine.observe(
-        CleaningObservation(18, 100000, 10, "Hall"), monotonic_now=2
+        CleaningObservation(18, 100000, 10, "Hall", target_segment_id=19), monotonic_now=2
     )
     assert not machine.observe(
-        CleaningObservation(18, 1100000, 70, "Kitchen"), monotonic_now=3
+        CleaningObservation(18, 1100000, 70, "Kitchen", target_segment_id=19), monotonic_now=3
     )
     assert machine.observe(
         CleaningObservation(6, 1100000, 80, "Kitchen"), monotonic_now=4
@@ -304,7 +322,7 @@ def test_app_segment_requires_meaningful_room_cleaning() -> None:
 
 
 def test_app_segment_does_not_complete_dock_room_after_kitchen() -> None:
-    """Only Kitchen completes when an app segment job starts/ends in Living."""
+    """Unknown app targets never complete Living or Kitchen from current_room alone."""
     machine = CleaningSessionMachine(ROOMS)
     machine.initialize(8)
 
@@ -323,7 +341,7 @@ def test_app_segment_does_not_complete_dock_room_after_kitchen() -> None:
             for index, observation in enumerate(observations, start=1)
         )
     )
-    assert completed == {"0_19"}
+    assert not completed
 
 
 def test_app_segment_can_complete_multiple_actually_cleaned_rooms() -> None:
@@ -332,11 +350,11 @@ def test_app_segment_can_complete_multiple_actually_cleaned_rooms() -> None:
     machine.initialize(8)
 
     observations = [
-        CleaningObservation(18, 0, 0, "Living"),
-        CleaningObservation(18, 500000, 30, "Kitchen"),
-        CleaningObservation(18, 1000000, 60, "Kitchen"),
-        CleaningObservation(18, 1500000, 90, "Bathroom"),
-        CleaningObservation(18, 2000000, 120, "Bathroom"),
+        CleaningObservation(18, 0, 0, "Living", segment_id=19),
+        CleaningObservation(18, 500000, 30, "Kitchen", segment_id=19),
+        CleaningObservation(18, 1000000, 60, "Kitchen", segment_id=19),
+        CleaningObservation(18, 1500000, 90, "Bathroom", segment_id=20),
+        CleaningObservation(18, 2000000, 120, "Bathroom", segment_id=20),
         CleaningObservation(6, 2000000, 130, "Bathroom"),
         CleaningObservation(8, 2000000, 130, "Living"),
     ]
