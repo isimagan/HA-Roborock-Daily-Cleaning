@@ -47,7 +47,7 @@
       [6, 6090000, 265, "Living"],
       [8, 6090000, 265, "Living"]
     ],
-    "completed": ["0_19"]
+    "completed": []
   },
   "normal_whole_home": {
     "targets": null,
@@ -131,6 +131,6 @@
       [6, 1000000, 60, "Bathroom"],
       [8, 1000000, 60, "Living"]
     ],
-    "completed": ["0_20"]
+    "completed": []
   }
 }

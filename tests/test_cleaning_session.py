@@ -55,7 +55,7 @@ def test_validated_cleaning_sequences(name: str) -> None:
     assert _run_fixture(name) == frozenset(FIXTURES[name]["completed"])
 
 
-def test_app_started_segment_job_uses_current_room_without_exact_id() -> None:
+def test_app_started_segment_job_without_targets_fails_safe() -> None:
     machine = CleaningSessionMachine(ROOMS)
     machine.initialize(8)
 
@@ -71,7 +71,7 @@ def test_app_started_segment_job_uses_current_room_without_exact_id() -> None:
             for index, observation in enumerate(observations, start=1)
         )
     )
-    assert completed == {"0_20"}
+    assert not completed
 
 
 def test_app_started_segment_job_attributes_first_cleaning_delta_to_new_room() -> None:
@@ -81,7 +81,7 @@ def test_app_started_segment_job_attributes_first_cleaning_delta_to_new_room() -
 
     observations = [
         # The robot starts at its dock in Living, but no area has been cleaned.
-        CleaningObservation(18, 0, 0, "Living"),
+        CleaningObservation(18, 0, 0, "Living", map_segments=(19,)),
         CleaningObservation(18, 0, 10, "Living"),
         # The first positive cleaning-area delta arrives with Kitchen as the
         # current room. It must belong to Kitchen, not the previous Living room.
@@ -260,7 +260,7 @@ def test_app_segment_completes_when_cleaning_ends_before_dock() -> None:
     machine.initialize(8)
 
     assert not machine.observe(
-        CleaningObservation(18, 0, 0, "Living"), monotonic_now=1
+        CleaningObservation(18, 0, 0, "Living", map_segments=(19,)), monotonic_now=1
     )
     assert not machine.observe(
         CleaningObservation(18, 0, 10, "Living"), monotonic_now=2
@@ -289,7 +289,7 @@ def test_app_segment_requires_meaningful_room_cleaning() -> None:
     machine.initialize(8)
 
     assert not machine.observe(
-        CleaningObservation(18, 0, 0, "Living"), monotonic_now=1
+        CleaningObservation(18, 0, 0, "Living", map_segments=(19,)), monotonic_now=1
     )
     # Small area/time growth is below the room-cleaning threshold.
     assert not machine.observe(
@@ -309,7 +309,7 @@ def test_app_segment_does_not_complete_dock_room_after_kitchen() -> None:
     machine.initialize(8)
 
     observations = [
-        CleaningObservation(18, 0, 0, "Living"),
+        CleaningObservation(18, 0, 0, "Living", map_segments=(19,)),
         CleaningObservation(18, 0, 10, "Living"),
         CleaningObservation(18, 400000, 30, "Kitchen"),
         CleaningObservation(18, 1000000, 60, "Kitchen"),
@@ -332,7 +332,7 @@ def test_app_segment_can_complete_multiple_actually_cleaned_rooms() -> None:
     machine.initialize(8)
 
     observations = [
-        CleaningObservation(18, 0, 0, "Living"),
+        CleaningObservation(18, 0, 0, "Living", map_segments=(20, 19)),
         CleaningObservation(18, 500000, 30, "Kitchen"),
         CleaningObservation(18, 1000000, 60, "Kitchen"),
         CleaningObservation(18, 1500000, 90, "Bathroom"),
@@ -347,3 +347,264 @@ def test_app_segment_can_complete_multiple_actually_cleaned_rooms() -> None:
         )
     )
     assert completed == {"0_19", "0_20"}
+
+
+def _run_app_observations(observations: list[CleaningObservation]) -> set[str]:
+    machine = CleaningSessionMachine(ROOMS)
+    machine.initialize(8)
+    completed: set[str] = set()
+    for index, observation in enumerate(observations, start=1):
+        result = machine.observe(observation, monotonic_now=index)
+        if observation.raw_state == 18:
+            assert not result
+        if machine.active:
+            # Verify transit rooms never acquire evidence, not just the output.
+            assert not ({"0_16", "0_17"} & machine._session.evidence.keys())
+        completed.update(result)
+    return completed
+
+
+def test_kitchen_targets_arrive_after_dock_room_exceeds_threshold() -> None:
+    assert _run_app_observations(
+        [
+            CleaningObservation(18, 0, 0, "Living"),
+            CleaningObservation(18, 280000, 28, "Living"),
+            CleaningObservation(18, 300000, 30, "Living", map_segments=(19,)),
+            CleaningObservation(18, 350000, 35, "Kitchen"),
+            CleaningObservation(18, 700000, 65, "Kitchen"),
+            CleaningObservation(6, 700000, 70, "Kitchen"),
+            CleaningObservation(6, 2000000, 150, "Living"),
+            CleaningObservation(8, 2000000, 150, "Living"),
+        ]
+    ) == {"0_19"}
+
+
+def test_bathroom_map_targets_known_at_dock_ignore_transit_growth() -> None:
+    assert _run_app_observations(
+        [
+            CleaningObservation(18, 0, 0, "Living", map_segments=(20,)),
+            CleaningObservation(18, 280000, 28, "Living"),
+            CleaningObservation(18, 560000, 56, "Hall"),
+            CleaningObservation(18, 570000, 60, "Bathroom"),
+            CleaningObservation(18, 900000, 90, "Bathroom"),
+            CleaningObservation(18, 1500000, 150, "Hall"),
+            CleaningObservation(6, 2000000, 200, "Living"),
+        ]
+    ) == {"0_20"}
+
+
+@pytest.mark.parametrize(
+    "room_order", [("Bathroom", "Kitchen"), ("Kitchen", "Bathroom")]
+)
+def test_map_multi_room_allowlist_does_not_impose_order(
+    room_order: tuple[str, str],
+) -> None:
+    first, second = room_order
+    assert _run_app_observations(
+        [
+            CleaningObservation(18, 0, 0, "Hall", map_segments=(20, 19)),
+            CleaningObservation(18, 280000, 28, "Hall"),
+            CleaningObservation(18, 560000, 56, "Living"),
+            CleaningObservation(18, 600000, 60, first),
+            CleaningObservation(18, 1000000, 100, first),
+            CleaningObservation(18, 1300000, 130, "Hall"),
+            CleaningObservation(18, 1400000, 140, second),
+            CleaningObservation(18, 1800000, 180, second),
+            CleaningObservation(6, 1800000, 190, second),
+            CleaningObservation(6, 2500000, 250, "Living"),
+            CleaningObservation(8, 2500000, 250, "Living"),
+        ]
+    ) == {"0_20", "0_19"}
+
+
+def test_pre_target_growth_is_not_retroactively_credited() -> None:
+    assert not _run_app_observations(
+        [
+            CleaningObservation(18, 0, 0, "Kitchen"),
+            CleaningObservation(18, 280000, 28, "Kitchen"),
+            CleaningObservation(18, 1000000, 100, "Kitchen", map_segments=(19,)),
+            CleaningObservation(18, 1100000, 110, "Kitchen"),
+            CleaningObservation(6, 1100000, 110, "Kitchen"),
+        ]
+    )
+
+
+def test_map_targets_are_locked_despite_cache_changes() -> None:
+    assert _run_app_observations(
+        [
+            CleaningObservation(18, 0, 0, "Living", map_segments=(19,)),
+            CleaningObservation(18, 300000, 30, "Kitchen"),
+            CleaningObservation(18, 700000, 70, "Bathroom", map_segments=(20,)),
+            CleaningObservation(18, 1200000, 120, "Bathroom", map_segments=()),
+            CleaningObservation(6, 1200000, 120, "Bathroom"),
+        ]
+    ) == {"0_19"}
+
+
+def test_no_targets_never_credits_room_names_or_map_location() -> None:
+    assert not _run_app_observations(
+        [
+            CleaningObservation(18, 0, 0, "Living", map_vacuum_room=16),
+            CleaningObservation(18, 280000, 28, "Living", map_segments=()),
+            CleaningObservation(18, 1000000, 100, "Kitchen", map_vacuum_room=19),
+            CleaningObservation(6, 1000000, 120, "Kitchen"),
+        ]
+    )
+
+
+def test_numeric_map_location_takes_precedence_over_room_name() -> None:
+    assert _run_app_observations(
+        [
+            CleaningObservation(
+                18, 0, 0, "Kitchen", map_segments=(19,), map_vacuum_room=16
+            ),
+            CleaningObservation(18, 280000, 28, "Kitchen", map_vacuum_room=17),
+            CleaningObservation(18, 300000, 30, "Living", map_vacuum_room=19),
+            CleaningObservation(18, 700000, 70, "Living", map_vacuum_room=19),
+            CleaningObservation(6, 700000, 80, "Living", map_vacuum_room=19),
+        ]
+    ) == {"0_19"}
+
+
+@pytest.mark.parametrize("abort_state", [10, None, 17, 11, 8])
+def test_map_segment_jobs_preserve_abort_fail_safes(abort_state: int | None) -> None:
+    assert not _run_app_observations(
+        [
+            CleaningObservation(18, 0, 0, "Living", map_segments=(19, 20)),
+            CleaningObservation(18, 300000, 30, "Kitchen"),
+            CleaningObservation(abort_state, 300000, 30, "Kitchen"),
+            CleaningObservation(6, 1000000, 100, "Kitchen"),
+            CleaningObservation(8, 1000000, 100, "Living"),
+        ]
+    )
+
+
+def test_map_job_pause_resume_keeps_targets() -> None:
+    assert _run_app_observations(
+        [
+            CleaningObservation(18, 0, 0, "Living", map_segments=(19,)),
+            CleaningObservation(18, 300000, 30, "Kitchen"),
+            CleaningObservation(10, 300000, 30, "Kitchen"),
+            CleaningObservation(18, 600000, 60, "Kitchen", map_segments=(20,)),
+            CleaningObservation(6, 600000, 70, "Kitchen"),
+        ]
+    ) == {"0_19"}
+
+
+def test_ha_plan_remains_authoritative_over_map_targets() -> None:
+    machine = CleaningSessionMachine(ROOMS)
+    machine.initialize(8)
+    assert machine.set_requested_segments([20], monotonic_now=0)
+    assert not machine.observe(
+        CleaningObservation(
+            18, 0, 0, "Bathroom", map_segments=(19,), map_vacuum_room=19
+        ),
+        monotonic_now=1,
+    )
+    assert not machine.observe(
+        CleaningObservation(18, 300000, 30, "Bathroom", map_segments=(19,)),
+        monotonic_now=2,
+    )
+    assert machine.observe(
+        CleaningObservation(6, 300000, 30, "Bathroom"), monotonic_now=3
+    ) == {"0_20"}
+
+
+def test_unvisited_or_under_cleaned_selected_rooms_do_not_complete() -> None:
+    assert _run_app_observations(
+        [
+            CleaningObservation(18, 0, 0, "Hall", map_segments=(20, 19)),
+            CleaningObservation(18, 300000, 30, "Kitchen"),
+            CleaningObservation(18, 310000, 31, "Bathroom"),
+            CleaningObservation(6, 310000, 31, "Bathroom"),
+        ]
+    ) == {"0_19"}
+
+
+def test_first_targets_during_return_cannot_complete_any_room() -> None:
+    assert not _run_app_observations(
+        [
+            CleaningObservation(18, 0, 0, "Kitchen"),
+            CleaningObservation(18, 300000, 30, "Kitchen"),
+            CleaningObservation(6, 1000000, 100, "Kitchen", map_segments=(19,)),
+            CleaningObservation(8, 1000000, 100, "Living"),
+        ]
+    )
+
+
+def test_transit_growth_on_first_return_cannot_confirm_last_target() -> None:
+    assert not _run_app_observations(
+        [
+            CleaningObservation(18, 0, 0, "Living", map_segments=(19,)),
+            CleaningObservation(18, 100000, 10, "Kitchen"),
+            CleaningObservation(6, 1000000, 100, "Living"),
+        ]
+    )
+
+
+def test_map_allowlist_replaces_and_discards_pre_target_exact_evidence() -> None:
+    machine = CleaningSessionMachine(ROOMS)
+    machine.initialize(8)
+    observations = [
+        CleaningObservation(18, 0, 0, "Living", segment_id=16),
+        CleaningObservation(18, 300000, 30, "Living", segment_id=16),
+        CleaningObservation(
+            18, 600000, 60, "Living", segment_id=16, map_segments=(19,)
+        ),
+        CleaningObservation(18, 900000, 90, "Living", segment_id=16),
+        CleaningObservation(18, 1000000, 100, "Kitchen", segment_id=19),
+        CleaningObservation(18, 1400000, 140, "Kitchen", segment_id=19),
+        CleaningObservation(6, 1400000, 140, "Kitchen", segment_id=19),
+    ]
+    completed = set().union(
+        *(
+            machine.observe(obs, monotonic_now=i)
+            for i, obs in enumerate(observations, 1)
+        )
+    )
+    assert completed == {"0_19"}
+
+
+def test_unconfigured_map_targets_never_enable_name_or_exact_fallback() -> None:
+    assert not _run_app_observations(
+        [
+            CleaningObservation(18, 0, 0, "Living", map_segments=(99,)),
+            CleaningObservation(18, 1000000, 100, "Kitchen", segment_id=19),
+            CleaningObservation(6, 1000000, 100, "Kitchen", segment_id=19),
+        ]
+    )
+
+
+def test_map_targets_do_not_survive_into_next_session() -> None:
+    machine = CleaningSessionMachine(ROOMS)
+    machine.initialize(8)
+    for targets, room, expected in [
+        ((19,), "Kitchen", {"0_19"}),
+        (None, "Bathroom", set()),
+    ]:
+        assert not machine.observe(
+            CleaningObservation(18, 0, 0, room, map_segments=targets), monotonic_now=1
+        )
+        assert not machine.observe(
+            CleaningObservation(18, 300000, 30, room), monotonic_now=2
+        )
+        assert (
+            machine.observe(CleaningObservation(6, 300000, 30, room), monotonic_now=3)
+            == expected
+        )
+        assert not machine.observe(
+            CleaningObservation(8, 300000, 30, "Living"), monotonic_now=4
+        )
+
+
+def test_reload_with_map_targets_does_not_adopt_active_job() -> None:
+    machine = CleaningSessionMachine(ROOMS)
+    machine.initialize(18)
+    assert not machine.observe(
+        CleaningObservation(18, 1000000, 100, "Kitchen", map_segments=(19,)),
+        monotonic_now=1,
+    )
+    assert not machine.observe(
+        CleaningObservation(6, 2000000, 200, "Kitchen", map_segments=(19,)),
+        monotonic_now=2,
+    )
