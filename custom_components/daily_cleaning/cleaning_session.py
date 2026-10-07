@@ -69,6 +69,8 @@ class CleaningObservation:
     current_room: str | None = None
     segment_id: str | int | None = None
     target_segment_id: str | int | None = None
+    map_segments: tuple[str | int, ...] | None = None
+    map_vacuum_room: int | None = None
 
 
 @dataclass(slots=True)
@@ -79,7 +81,10 @@ class _Evidence:
     @property
     def confirms_cleaning(self) -> bool:
         """Require both kinds of session-local growth."""
-        return self.area >= _MIN_ROOM_CLEAN_AREA and self.duration >= _MIN_ROOM_CLEAN_SECONDS
+        return (
+            self.area >= _MIN_ROOM_CLEAN_AREA
+            and self.duration >= _MIN_ROOM_CLEAN_SECONDS
+        )
 
 
 @dataclass(slots=True)
@@ -87,6 +92,7 @@ class _Session:
     mode: SessionMode
     raw_cleaning_state: int
     requested_segments: tuple[str, ...] | None
+    map_segments: frozenset[str] | None = None
     phase: SessionPhase = SessionPhase.CLEANING
     return_was_normal: bool = False
     active_segment: str | None = None
@@ -334,6 +340,15 @@ class CleaningSessionMachine:
         session.last_time = duration if duration is not None else session.last_time
         if session.active_segment is None:
             return
+        if (
+            session.mode is SessionMode.SEGMENTS
+            and session.requested_segments is None
+            and self._app_segment_for_observation(session, observation)
+            != session.active_segment
+        ):
+            # A terminal/pause sample in a transit room cannot add evidence to
+            # the last target. Keep HA-plan and whole-home semantics unchanged.
+            return
         evidence = session.evidence.setdefault(session.active_segment, _Evidence())
         evidence.area += area_delta
         evidence.duration += time_delta
@@ -350,30 +365,24 @@ class CleaningSessionMachine:
         exact_segment = self._canonical_segment(observation.segment_id)
         candidate = exact_segment or self._segment_for_room(observation.current_room)
         if session.requested_segments is None:
-            # App-started segment jobs do not expose a trustworthy target list.
-            # Prefer an exact Roborock segment ID when one is available.
-            if exact_segment is not None:
-                if session.active_segment != exact_segment:
-                    self._finish_active_if_confirmed(session)
-                    session.active_segment = exact_segment
-                return
-
-            # Without an exact ID, current_room is only a location hint. Do not
-            # finalize the previous room merely because the robot moved through
-            # another configured room. Metric deltas are attributed after this
-            # update, so a transit/dock room with no cleaning growth remains
-            # unconfirmed while the room where cleaning actually starts gains
-            # the evidence.
-            if candidate is None:
-                return
-            if session.active_segment is None:
+            if session.map_segments is None and observation.map_segments:
+                # First non-empty map target list is session-local membership,
+                # never an execution order. Discard all pre-target metric growth.
+                session.map_segments = frozenset(
+                    segment
+                    for value in observation.map_segments
+                    if (segment := self._canonical_segment(value)) is not None
+                )
+                session.evidence.clear()
+                session.completed_before_active.clear()
+                session.active_segment = None
+                session.last_area = _number(observation.clean_area)
+                session.last_time = _number(observation.clean_time)
+            candidate = self._app_segment_for_observation(session, observation)
+            if session.active_segment != candidate:
+                self._finish_active_if_confirmed(session)
+                # Clear the active room in transit, including unknown rooms.
                 session.active_segment = candidate
-                return
-            if session.active_segment == candidate:
-                return
-            if self._is_confirmed(session, session.active_segment):
-                session.completed_before_active.add(session.active_segment)
-            session.active_segment = candidate
             return
 
         if candidate is None:
@@ -397,6 +406,21 @@ class CleaningSessionMachine:
         self._finish_active_if_confirmed(session)
         session.active_requested_index = candidate_index
         session.active_segment = candidate
+
+    def _app_segment_for_observation(
+        self, session: _Session, observation: CleaningObservation
+    ) -> str | None:
+        if session.map_segments is None:
+            # Models exposing an exact status ID still work without map targets.
+            # A room name or map location alone is not an authoritative target.
+            return self._canonical_segment(observation.segment_id)
+        if observation.map_vacuum_room is not None:
+            candidate = self._canonical_segment(observation.map_vacuum_room)
+        elif observation.segment_id is not None:
+            candidate = self._canonical_segment(observation.segment_id)
+        else:
+            candidate = self._segment_for_room(observation.current_room)
+        return candidate if candidate in session.map_segments else None
 
     def _finish_active_if_confirmed(self, session: _Session) -> None:
         active = session.active_segment

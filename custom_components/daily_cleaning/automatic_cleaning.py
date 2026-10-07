@@ -28,6 +28,7 @@ from .cleaning_session import (
     CleaningSessionMachine,
     RoomTarget,
 )
+from .map_cache import cached_map_segments
 from .models import RoomConfig
 
 _LOGGER = logging.getLogger(__name__)
@@ -252,6 +253,8 @@ class AutomaticCleaningManager:
         if target_segment_id is None:
             target_segment_id = _first_value(sources, ("target_segment_id",))
 
+        map_segments, map_vacuum_room = cached_map_segments(entity)
+
         return CleaningObservation(
             raw_state=_integer(raw_state),
             clean_area=_number(
@@ -273,6 +276,8 @@ class AutomaticCleaningManager:
             current_room=(current_room if isinstance(current_room, str) else None),
             segment_id=_simple_value(segment_id),
             target_segment_id=_simple_value(target_segment_id),
+            map_segments=tuple(map_segments) if map_segments is not None else None,
+            map_vacuum_room=map_vacuum_room,
         )
 
     def _resolve_entity_id(self, room: RoomConfig) -> str:
