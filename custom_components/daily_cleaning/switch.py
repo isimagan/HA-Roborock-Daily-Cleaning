@@ -62,6 +62,11 @@ class DailyCleaningRoomSwitch(DailyCleaningEntity, SwitchEntity):
         ):
             registry.async_update_entity(self.entity_id, area_id=self.room.area_id)
 
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Opt in to in-place entity ID changes."""
+        super().async_entity_id_changed(old_entity_id)
+
     @property
     def is_on(self) -> bool:
         """Return true when this room still needs cleaning."""
